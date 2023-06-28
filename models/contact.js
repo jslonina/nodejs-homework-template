@@ -1,22 +1,14 @@
 const mongoose = require("mongoose");
-const Schema = mongoose.Schema;
+const mongoosePaginate = require("mongoose-paginate-v2");
 const Joi = require("joi");
+const JoiPhoneValidate = Joi.extend(require("joi-phone-number"));
 
-const favoriteValidationSchema = Joi.object({
-  favorite: Joi.boolean(),
-});
+const Shema = mongoose.Schema;
 
-const contactValidationSchema = Joi.object({
-  name: Joi.string().min(3).required(),
-  email: Joi.string().email(),
-  phone: Joi.string(),
-});
-
-const contactSchema = new Schema(
+const contactSchema = new Shema(
   {
     name: {
       type: String,
-      required: [true, "Set name for contact"],
     },
     email: {
       type: String,
@@ -28,10 +20,63 @@ const contactSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    owner: {
+      type: mongoose.SchemaTypes.ObjectId,
+      ref: "user",
+    },
   },
-  { versionKey: false, timestamps: true }
+  {
+    versionKey: false,
+  }
 );
 
-const Contact = mongoose.model("contact", contactSchema);
+contactSchema.plugin(mongoosePaginate);
 
-module.exports = { Contact, contactValidationSchema, favoriteValidationSchema };
+const Contact = mongoose.model("Contact", contactSchema);
+
+const validator = (schema) => (payload) =>
+  schema.validate(payload, { abortEarly: false });
+
+const contactCreateValidationShema = Joi.object({
+  name: Joi.string().min(3).max(30).required(),
+  email: Joi.string().email().required(),
+  phone: JoiPhoneValidate.string()
+    .phoneNumber({ defaultCountry: "PL", format: "international" })
+    .required(),
+  favorite: Joi.boolean(),
+});
+
+const contactUpdateValidationShema = Joi.object({
+  name: Joi.string().min(3).max(30).required(),
+  email: Joi.string().email().required(),
+  phone: JoiPhoneValidate.string()
+    .phoneNumber({
+      defaultCountry: "PL",
+      format: "international",
+    })
+    .required(),
+  favorite: Joi.boolean().required(),
+});
+
+const contactUpdateStatusValidationShema = Joi.object({
+  favorite: Joi.boolean().required(),
+});
+
+const idShema = Joi.object({
+  contactId: Joi.string().alphanum().length(24),
+});
+
+const validateCreateContact = validator(contactCreateValidationShema);
+const validateUpdateContact = validator(contactUpdateValidationShema);
+const validateUpdateStatusContact = validator(
+  contactUpdateStatusValidationShema
+);
+const validateIdContact = validator(idShema);
+
+module.exports = {
+  Contact,
+  validateCreateContact,
+  validateUpdateContact,
+  validateUpdateStatusContact,
+  validateIdContact,
+};
