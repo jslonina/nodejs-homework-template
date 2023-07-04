@@ -1,71 +1,44 @@
-const { Contact } = require("../models/contact.js");
+const { Contact } = require("../models/contact");
 
-const listContacts = async () => {
+const addContact = async (name, email, phone, favorite) => {
   try {
-    const contacts = await Contact.find();
-    return contacts;
-  } catch (err) {
-    console.log(err.message);
-  }
-};
-
-const getContactById = async (contactId) => {
-  try {
-    const contact = await Contact.findById({ _id: contactId });
+    const contact = new Contact(name, email, phone, favorite);
+    contact.save();
     return contact;
   } catch (err) {
-    console.log(err.message);
+    console.log(err);
   }
 };
 
-const addContact = async (body) => {
+const listContacts = async () => {
+  const contacts = await Contact.find();
+  return contacts;
+};
+
+const getContactById = async (_id) => {
+  const contact = await Contact.findOne({ _id });
+  return contact;
+};
+
+const removeContact = async (_id) => {
   try {
-    const newContact = new Contact({
-      name: body.name,
-      email: body.email,
-      phone: body.phone,
-    });
-    await newContact.save();
-    return newContact;
+    return Contact.findByIdAndDelete({ _id });
   } catch (err) {
-    console.log(err.message);
+    console.log(err);
   }
 };
 
-const removeContact = async (contactId) => {
-  try {
-    return Contact.findByIdAndRemove({ _id: contactId });
-  } catch (err) {
-    console.log(err.message);
-  }
+const updateContact = async (id, newUser) => {
+  const updatedContact = await Contact.findByIdAndUpdate(id, newUser, {
+    new: true,
+  });
+  return updatedContact;
 };
 
-const updateContact = async (contactId, updatedData) => {
-  try {
-    const updatedContact = await Contact.findByIdAndUpdate(
-      {
-        _id: contactId,
-      },
-      updatedData,
-      { new: true }
-    );
-    return updatedContact;
-  } catch (err) {
-    console.log(err.message);
-  }
-};
-
-const updateStatus = async (contactId, updatedData) => {
-  try {
-    const updatedContact = await Contact.findByIdAndUpdate(
-      { _id: contactId },
-      updatedData,
-      { new: true }
-    );
-    return updatedContact;
-  } catch (err) {
-    console.log(err.message);
-  }
+const updateStatusContact = async (id, favorite) => {
+  const updatedStatus = await Contact.findByIdAndUpdate(id, { favorite });
+  updatedStatus.favorite = favorite;
+  return updatedStatus;
 };
 
 module.exports = {
@@ -74,5 +47,5 @@ module.exports = {
   removeContact,
   addContact,
   updateContact,
-  updateStatus,
+  updateStatusContact,
 };

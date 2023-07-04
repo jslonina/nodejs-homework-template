@@ -1,17 +1,16 @@
 const mongoose = require("mongoose");
 const Schema = mongoose.Schema;
 const bcrypt = require("bcrypt");
-const Joi = require("joi");
 
-const userSchema = new Schema({
+const users = new Schema({
+  password: {
+    type: String,
+    required: [true, "Password is required"],
+  },
   email: {
     type: String,
     required: [true, "Email is required"],
     unique: true,
-  },
-  password: {
-    type: String,
-    required: [true, "Password is required"],
   },
   subscription: {
     type: String,
@@ -27,17 +26,12 @@ const userSchema = new Schema({
   },
 });
 
-const hashPassword = (password) => {
+const hashPassword = (pass) => {
   const salt = bcrypt.genSaltSync(10);
-  const hashedPassword = bcrypt.hashSync(password, salt);
+  const hashedPassword = bcrypt.hashSync(pass, salt);
   return hashedPassword;
 };
 
-const userValidationSchema = Joi.object({
-  password: Joi.string().required().min(6),
-  email: Joi.string().required().email(),
-});
+const User = mongoose.model("user", users);
 
-const User = mongoose.model("user", userSchema);
-
-module.exports = { User, userValidationSchema, hashPassword };
+module.exports = { User, hashPassword };
