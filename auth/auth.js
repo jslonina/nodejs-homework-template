@@ -1,29 +1,30 @@
 const jwt = require("jsonwebtoken");
-const { getUserById } = require("../controllers/users.js");
+
+require("dotenv").config();
 
 const jwtSecret = process.env.JWT_SECRET;
 
-const auth = async (req, res, next) => {
+const auth = (req, res, next) => {
   const token = req.headers.authorization;
+
   if (!token) {
-    return res.status(401).send("No token provided");
+    return res.status(401).json({
+      success: false,
+      message: "Unauthorized",
+    });
   }
 
   try {
     const decoded = jwt.verify(token, jwtSecret);
-    console.log("decoded", decoded);
-    const id = decoded.id;
-    console.log("id", id);
-
-    const user = await getUserById(id);
-    if (user) {
-      next();
-    } else {
-      return res.status(401).send("Not authorized");
-    }
-  } catch {
-    return res.status(401).send("Access denied");
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      message: "Acces denided",
+      error,
+    });
   }
 };
 
-module.exports = { auth };
+module.exports = auth;

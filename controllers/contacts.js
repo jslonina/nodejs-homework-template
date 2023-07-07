@@ -1,14 +1,6 @@
 const { Contact } = require("../models/contact");
 
-const addContact = async (name, email, phone, favorite) => {
-  try {
-    const contact = new Contact(name, email, phone, favorite);
-    contact.save();
-    return contact;
-  } catch (err) {
-    console.log(err);
-  }
-};
+const { hashPassword } = require("../models/user.js");
 
 const listContacts = async () => {
   const contacts = await Contact.find();
@@ -16,8 +8,8 @@ const listContacts = async () => {
 };
 
 const getContactById = async (_id) => {
-  const contact = await Contact.findOne({ _id });
-  return contact;
+  const contacts = await Contact.find({ _id });
+  return contacts;
 };
 
 const removeContact = async (_id) => {
@@ -28,17 +20,38 @@ const removeContact = async (_id) => {
   }
 };
 
-const updateContact = async (id, newUser) => {
-  const updatedContact = await Contact.findByIdAndUpdate(id, newUser, {
-    new: true,
-  });
+const addContact = async (name, email, phone, password) => {
+  const hashedPassword = hashPassword(password);
+
+  try {
+    const contact = new Contact({
+      name,
+      email,
+      phone,
+      password: hashedPassword,
+    });
+    contact.save();
+    return contact;
+  } catch (err) {
+    console.log(err);
+    throw err;
+  }
+};
+
+const updateContact = async (id, newContact) => {
+  const updatedContact = await Contact.findByIdAndUpdate({ id, newContact });
   return updatedContact;
 };
 
 const updateStatusContact = async (id, favorite) => {
-  const updatedStatus = await Contact.findByIdAndUpdate(id, { favorite });
-  updatedStatus.favorite = favorite;
-  return updatedStatus;
+  const updatedContact = await Contact.findByIdAndUpdate(
+    id,
+    { favorite },
+    {
+      new: true,
+    }
+  );
+  return updatedContact;
 };
 
 module.exports = {

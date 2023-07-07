@@ -1,142 +1,138 @@
+const fs = require("fs");
 const express = require("express");
-const { userValidationSchema } = require("../../schema.js");
 const jwt = require("jsonwebtoken");
-const { loginHandler } = require("../../auth/loginHandler");
-const { auth } = require("../../auth/auth.js");
-const { upload, storeImage } = require("../../config/multer.js");
-const path = require("path");
-const fs = require("fs").promises;
+const multer = require("multer");
 const Jimp = require("jimp");
-const NewStoreImage = path.join(process.cwd(), "public/avatars");
+const path = require("path");
 
-const {
-  getUserByEmail,
-  createUser,
-  getUserById,
-  updateTokenStatus,
-  findUserIdFromToken,
-} = require("../../controllers/users.js");
+const jwtSecret = process.env.JWT_SECRET;
+
+const loginHandler = require("../../auth/loginHandler");
+const auth = require("../../auth/auth");
+const userControllers = require("../../controllers/users.js");
+
+const storeAvatar = path.join(process.cwd(), "tmp");
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, storeAvatar);
+  },
+  filename: (req, file, cb) => {
+    cb(null, file.originalName);
+  },
+  limits: 1048576,
+});
+
+const upload = multer({ storage });
+
+require("dotenv").config();
 
 const router = express.Router();
 
-router.post("/signup", upload.single("avatar"), async (req, res, next) => {
-  const { error } = userValidationSchema.validate(req.body);
-  if (error) {
-    return res.status(400).send(error.details[0].message);
-  }
-  const email = req.body.email;
-  const ifEmailExist = await getUserByEmail(email);
+const { User, userValidationSchema } = require("../../models/user");
 
-  if (ifEmailExist) {
-    return res.status(409).send({ message: "Email in use" });
+router.post("/signup", async (req, res, next) => {
+  const { error } = userValidationSchema.validate(req.body);
+  const { email, password } = req.body;
+  if (error) {
+    return res.status(409).json(error.details[0].message);
   }
+
+  const user = await User.findOne({ email });
+
+  if (user) {
+    return res.status(409).json({
+      status: "error",
+      code: 409,
+      message: "Email id already in use",
+      data: "Conflict",
+    });
+  }
+
   try {
-    if (req.file !== undefined) {
-      const { path: temporaryName, originalname } = req.file;
-      const filePath = path.join(storeImage, originalname);
-      const { email, password } = req.body;
-      const user = await createUser(email, password, filePath);
-      await fs.rename(temporaryName, filePath);
-      return res.status(201).json(user);
-    } else {
-      const { email, password } = req.body;
-      const user = await createUser(email, password);
-      return res.status(201).json(user);
-    }
-  } catch (err) {
+    const user = await userControllers.createUser(email, password);
+    return res.status(200).json(user);
+  } catch (error) {
     return res.status(500).send("Something went wrong");
   }
 });
 
 router.post("/login", async (req, res, next) => {
-  const { error } = userValidationSchema.validate(req.body);
-  if (error) {
-    return res.status(400).send(error.details[0].message);
-  }
   const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({
+      status: "error",
+      code: 400,
+      message: "Incorrect login or password",
+      data: "Bad request",
+    });
+  }
+
   try {
-    const updatedStatus = await loginHandler(email, password);
-    return res.status(200).json(updatedStatus);
-  } catch {
-    return res.status(401).send({ message: "Email or password is wrong" });
+    const token = await loginHandler(email, password);
+
+    return res.status(200).send(token);
+  } catch (err) {
+    return res.status(401).send(err);
   }
 });
 
-router.get("/logout", auth, async (req, res, next) => {
+router.get("/logout", auth, async (req, res) => {
   try {
-    const jwtSecret = process.env.JWT_SECRET;
-    const token = req.headers.authorization;
-    const decoded = jwt.verify(token, jwtSecret);
-    const id = decoded.id;
-
-    const user = await getUserById(id);
-
-    if (user) {
-      const removeTokenFromUser = await updateTokenStatus(id, null);
-      console.log("removeTokenFromUser", removeTokenFromUser);
-      return res.status(204).json(removeTokenFromUser);
-    } else {
-      return res.status(401).send("Not authorized");
-    }
-  } catch {
-    return res.status(401).send({ message: "Not authorized!!!" });
+    const { token } = req.headers.authorization;
+    const verify = jwt.verify(token, jwtSecret);
+    const user = await userControllers.logout(verify);
+    res.status(204).send("Logout success", user);
+  } catch (error) {
+    res.status(500).send("Server error");
   }
 });
 
-router.get("/current", auth, async (req, res, next) => {
+router.get("/current", auth, async (req, res) => {
   try {
-    const token = req.headers.authorization;
+    const { token } = req.user;
+    const user = await userControllers.getUserByToken(token);
 
-    const findUserIdFromToken = (token) => {
-      const jwtSecret = process.env.JWT_SECRET;
-      const decoded = jwt.verify(token, jwtSecret);
-      const id = decoded.id;
-      return id;
-    };
-    const id = findUserIdFromToken(token);
-
-    const user = await getUserById(id);
-
-    if (user && user.token === token) {
-      return res.status(200).json(user);
-    } else {
-      return res.status(401).send("Not authorized");
+    if (!user) {
+      return res.status(401).json({ message: "Not authorized" });
     }
-  } catch {
-    return res.status(401).send({ message: "Not authorized!!!" });
+    return res.status(200).json(user);
+  } catch (error) {
+    res.status(500).send(error);
   }
 });
 
 router.patch(
   "/avatars",
   auth,
-  upload.single("avatar"),
-  async (req, res, next) => {
+  upload.single("avatar", async (req, res, next) => {
     try {
-      const token = req.headers.authorization;
-      const id = findUserIdFromToken(token);
-      const user = await getUserById(id);
-      if (user && user.token === token) {
-        const { path: temporaryName, originalname } = req.file;
-        const filePath = path.join(storeImage, originalname);
-        await fs.rename(temporaryName, filePath);
-        const ImgName = path.basename(user.avatarURL);
-        const newFilePath = path.join(NewStoreImage, ImgName);
+      const { email } = req.user;
+      const { path: temporaryName, originalName } = req.file;
+      const fileName = path.join(storeAvatar, originalName);
+      await fs.rename(temporaryName, fileName);
 
-        Jimp.read(filePath, (err, pict) => {
-          if (err) throw err;
-          pict.resize(250, 250).quality(80).write(newFilePath);
-        });
-        await fs.unlink(temporaryName);
-        return res.status(200).json({ avatarURL: originalname });
-      } else {
-        return res.status(401).send("Not authorized");
-      }
+      const img = await Jimp.read(fileName);
+      await img.autocrop().cover(250, 250).quality(72).writeAsync(fileName);
+
+      await fs.rename(
+        fileName,
+        path.join(process.cwd(), "public/avatars", originalName)
+      );
+
+      const avatarURL = path.join(
+        process.cwd(),
+        "public/avatars",
+        originalName
+      );
+      const cleanAvatarURL = avatarURL.replace(/\s/g, "/");
+      const user = await userControllers.updateAvatar(email, cleanAvatarURL);
+      res.status(200).json(user);
     } catch (err) {
-      console.log(err);
-      return res.status(500).send({ message: `${err}` });
+      next(err);
+      return res.status(500).send("Server error");
     }
-  }
+  })
 );
 
 module.exports = router;

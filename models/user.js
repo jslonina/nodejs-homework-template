@@ -1,6 +1,9 @@
+const Joi = require("joi");
+
 const mongoose = require("mongoose");
-const Schema = mongoose.Schema;
 const bcrypt = require("bcrypt");
+
+const Schema = mongoose.Schema;
 
 const users = new Schema({
   password: {
@@ -17,12 +20,17 @@ const users = new Schema({
     enum: ["starter", "pro", "business"],
     default: "starter",
   },
+  avatarURL: {
+    type: String,
+  },
+
   token: {
     type: String,
     default: null,
   },
-  avatarURL: {
-    type: String,
+  owner: {
+    type: mongoose.SchemaTypes.ObjectId,
+    ref: "user",
   },
 });
 
@@ -34,4 +42,9 @@ const hashPassword = (pass) => {
 
 const User = mongoose.model("user", users);
 
-module.exports = { User, hashPassword };
+const userValidationSchema = Joi.object({
+  password: Joi.string().required(),
+  email: Joi.string().required().email(),
+});
+
+module.exports = { User, userValidationSchema, hashPassword };
