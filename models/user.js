@@ -1,50 +1,51 @@
+const mongoose = require("mongoose");
+const Schema = mongoose.Schema;
+const bcrypt = require("bcrypt");
 const Joi = require("joi");
 
-const mongoose = require("mongoose");
-const bcrypt = require("bcrypt");
-
-const Schema = mongoose.Schema;
-
-const users = new Schema({
-  password: {
-    type: String,
-    required: [true, "Password is required"],
-  },
+const userSchema = new Schema({
   email: {
     type: String,
     required: [true, "Email is required"],
     unique: true,
+  },
+  password: {
+    type: String,
+    required: [true, "Password is required"],
   },
   subscription: {
     type: String,
     enum: ["starter", "pro", "business"],
     default: "starter",
   },
-  avatarURL: {
-    type: String,
-  },
-
   token: {
     type: String,
     default: null,
   },
-  owner: {
-    type: mongoose.SchemaTypes.ObjectId,
-    ref: "user",
+  avatarURL: {
+    type: String,
+  },
+  verify: {
+    type: Boolean,
+    default: false,
+  },
+  verificationToken: {
+    type: String,
+    required: [true, "Verify token is required"],
   },
 });
 
-const hashPassword = (pass) => {
+const hashPassword = (password) => {
   const salt = bcrypt.genSaltSync(10);
-  const hashedPassword = bcrypt.hashSync(pass, salt);
+  const hashedPassword = bcrypt.hashSync(password, salt);
   return hashedPassword;
 };
 
-const User = mongoose.model("user", users);
-
 const userValidationSchema = Joi.object({
-  password: Joi.string().required(),
+  password: Joi.string().required().min(6),
   email: Joi.string().required().email(),
 });
+
+const User = mongoose.model("user", userSchema);
 
 module.exports = { User, userValidationSchema, hashPassword };
