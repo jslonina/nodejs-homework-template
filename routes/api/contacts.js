@@ -1,138 +1,118 @@
 const express = require("express");
-
+const router = express.Router();
 const {
   listContacts,
   getContactById,
   removeContact,
   addContact,
   updateContact,
-  updateStatus,
-} = require("../../controllers/contacts.js");
+  updateFavorite,
+} = require("./../../controllers/contactOperations");
+
+const tokenMiddleware = require("./../../middlewares/tokenMiddleware");
 
 const {
-  contactValidationSchema,
-  favoriteValidationSchema,
-} = require("../../models/contact.js");
+  addContactSchema,
+  updateContactSchema,
+  favoriteSchema,
+} = require("../../models/contacts");
 
-const router = express.Router();
+// const {userSchema} = require("../../models/userModel");
 
-router.get("/", async (req, res, next) => {
+router.get("/", tokenMiddleware, async (req, res) => {
   try {
-    const contacts = await listContacts();
-    return res.status(200).json(contacts);
-  } catch {
-    return res.status(500).send("something went wrong");
-  }
-});
+    console.log(req.user.userId);
+    const contacts = await listContacts(req.user.userId);
 
-router.get("/:id", async (req, res, next) => {
-  const { id } = req.params;
-  if (id.length !== 24) {
-    return res
-      .status(400)
-      .json({ message: "Id needs to be 24 character long" });
-  }
-
-  try {
-    const { id } = req.params;
-    const contact = await getContactById(id);
-    if (!contact) {
-      return res.status(404).json({ message: "Not found" });
-    }
-    return res.status(200).json(contact);
-  } catch {
-    return res.status(500).send("something went wrong");
-  }
-});
-
-router.post("/", async (req, res, next) => {
-  const { error } = contactValidationSchema.validate(req.body);
-  if (error) {
-    const value = error.details[0].context.label;
-    return res
-      .status(400)
-      .send({ message: `missing required ${value} - field` });
-  }
-  try {
-    const contact = await addContact(req.body);
-    return res.status(201).json(contact);
-  } catch {
-    return res.status(500).send("something went wrong");
-  }
-});
-
-router.delete("/:id", async (req, res, next) => {
-  const { id } = req.params;
-  if (id.length !== 24) {
-    return res
-      .status(400)
-      .json({ message: "Id needs to be 24 character long" });
-  }
-
-  try {
-    const { id } = req.params;
-    const contact = await getContactById(id);
-    if (!contact) {
-      return res.status(404).json({ message: "Not found" });
-    }
-    await removeContact(id);
-    return res.status(200).json({ message: "contact deleted" });
-  } catch {
-    return res.status(500).send("something went wrong");
-  }
-});
-
-router.put("/:id", async (req, res, next) => {
-  const { id } = req.params;
-
-  if (id.length !== 24) {
-    return res
-      .status(400)
-      .json({ message: "Id needs to be 24 character long" });
-  }
-  try {
-    const contact = await getContactById(id);
-    if (!contact) {
-      return res.status(404).json({ message: "Not found" });
+    if (!contacts || contacts.length === 0) {
+      console.log("no contacts");
+      return res.sendStatus(204);
     }
 
-    const { error } = contactValidationSchema.validate(req.body);
+    res.status(200).json(contacts);
+  } catch (err) {
+    console.warn(err.message);
+  }
+});
+
+router.get("/:contactId", async (req, res) => {
+  try {
+    const contact = await getContactById(req.params.contactId);
+    !contact
+      ? res.status(404).json({ message: "Not found" })
+      : res.status(200).json(contact);
+  } catch (err) {
+    console.warn(err.message);
+  }
+});
+
+router.post("/", tokenMiddleware, async (req, res) => {
+  try {
+    const data = addContactSchema.validate(req.body);
+    console.log(data);
+    if (data.error) {
+      res.status(400).json({ message: "missing required field" });
+    } else {
+      const id = req.user;
+      const newContact = await addContact(req.body, id.userId);
+      res.status(201).json(newContact);
+    }
+  } catch (err) {
+    console.warn(err.message);
+  }
+});
+
+router.delete("/:contactId", async (req, res) => {
+  try {
+    const contact = await removeContact(req.params.contactId);
+    !contact
+      ? res.status(404).json({ message: "Not found" })
+      : res.status(200).json({ message: "Contact deleted" });
+  } catch (err) {
+    console.warn(err.message);
+  }
+});
+
+router.put("/:contactId", async (req, res) => {
+  try {
+    const { error } = updateContactSchema.validate(req.body);
     if (error) {
-      return res.status(400).send({ message: "missing fields" });
+      res.status(400).json({ message: "missing fields" });
     }
 
-    const updatedContact = await updateContact(id, req.body);
-    return res.status(200).json(updatedContact);
-  } catch {
-    return res.status(500).send("something went wrong");
+    const updatedContact = await updateContact(req.params.contactId, req.body);
+    if (!updatedContact) {
+      res.status(404).json({ message: "not found" });
+    }
+    res.status(200).json(updatedContact);
+  } catch (err) {
+    console.warn(err.message);
   }
 });
 
-router.patch("/:id/favorite", async (req, res, next) => {
-  const { id } = req.params;
-  const { favorite } = req.body;
-
-  if (id.length !== 24) {
-    return res
-      .status(400)
-      .json({ message: "Id needs to be 24 character long" });
-  }
-
+router.patch("/:contactId/favorite", async (req, res) => {
   try {
-    const contact = await getContactById(id);
-    if (!contact) {
-      return res.status(404).json({ message: "Not found" });
+    const validation = favoriteSchema.validate(req.body);
+    if (!req.body) {
+      res.status(400).json({ message: "missing field favorite" });
     }
 
-    const { error } = favoriteValidationSchema.validate({ favorite });
-    if (error) {
-      return res.status(400).send({ message: "missing field favorite" });
+    if (!validation) {
+      res.status(400).json({ message: "Incorrect value in a field favorite" });
     }
 
-    const updatedContact = await updateStatus(id, { favorite });
-    return res.status(200).json(updatedContact);
-  } catch {
-    return res.status(500).send("something went wrong");
+    const updatedFavorite = await updateFavorite(
+      req.params.contactId,
+      req.body
+    );
+
+    if (!updatedFavorite) {
+      res.status(404).json({ message: "Not found" });
+    } else {
+      res.status(200).json(updatedFavorite);
+    }
+  } catch (err) {
+    console.warn(err.message);
   }
 });
 
