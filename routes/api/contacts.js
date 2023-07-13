@@ -1,124 +1,119 @@
 const express = require("express");
 const router = express.Router();
-
-const contactsController = require("../../controllers/contactController");
 const {
-  validateCreateContact,
-  validateUpdateContact,
-  validateUpdateStatusContact,
-  validateIdContact,
-} = require("../../models/contact");
-const auth = require("../../auth/auth");
+  listContacts,
+  getContactById,
+  removeContact,
+  addContact,
+  updateContact,
+  updateFavorite,
+} = require("./../../controllers/contactOperations");
 
-const idValidation = async (req, res, next) => {
-  const { contactId } = req.params;
-  const { error } = validateIdContact({ contactId });
-  if (error) {
-    return res.status(400).json({ message: "Invalid id" });
-  }
-  const contact = await contactsController.getContactById(contactId);
-  if (!contact) {
-    return res
-      .status(404)
-      .json({ message: `Contact with id=${contactId} was not found.` });
-  }
-  next();
-};
+const tokenMiddleware = require("./../../middlewares/tokenMiddleware");
 
-router.get("/", auth, async (req, res, next) => {
-  const { page, limit, favorite } = req.query;
-  const options = {
-    page: page || 1,
-    limit: limit || 10,
-    collation: {
-      locale: "en",
-    },
-    favorite: favorite || null,
-  };
+const {
+  addContactSchema,
+  updateContactSchema,
+  favoriteSchema,
+} = require("../../models/contacts");
 
+// const {userSchema} = require("../../models/userModel");
+
+router.get("/", tokenMiddleware, async (req, res) => {
   try {
-    const contacts = await contactsController.listContacts(options);
+    console.log(req.user.userId);
+    const contacts = await listContacts(req.user.userId);
+
+    if (!contacts || contacts.length === 0) {
+      console.log("no contacts");
+      return res.sendStatus(204);
+    }
+
     res.status(200).json(contacts);
-  } catch (error) {
-    next(error);
-    return res.status(500).json({ message: "Server error" });
+  } catch (err) {
+    console.warn(err.message);
   }
 });
 
-router.get("/:contactId", auth, idValidation, async (req, res, next) => {
+router.get("/:contactId", async (req, res) => {
   try {
-    const { contactId } = req.params;
-    const contact = await contactsController.getContactById(contactId);
-    res.status(200).json(contact);
-  } catch (error) {
-    next(error);
-    return res.status(500).json({ message: "Server error" });
+    const contact = await getContactById(req.params.contactId);
+    !contact
+      ? res.status(404).json({ message: "Not found" })
+      : res.status(200).json(contact);
+  } catch (err) {
+    console.warn(err.message);
   }
 });
 
-router.post("/", auth, async (req, res, next) => {
+router.post("/", tokenMiddleware, async (req, res) => {
   try {
-    const { error } = validateCreateContact(req.body);
+    const data = addContactSchema.validate(req.body);
+    console.log(data);
+    if (data.error) {
+      res.status(400).json({ message: "missing required field" });
+    } else {
+      const id = req.user;
+      const newContact = await addContact(req.body, id.userId);
+      res.status(201).json(newContact);
+    }
+  } catch (err) {
+    console.warn(err.message);
+  }
+});
+
+router.delete("/:contactId", async (req, res) => {
+  try {
+    const contact = await removeContact(req.params.contactId);
+    !contact
+      ? res.status(404).json({ message: "Not found" })
+      : res.status(200).json({ message: "Contact deleted" });
+  } catch (err) {
+    console.warn(err.message);
+  }
+});
+
+router.put("/:contactId", async (req, res) => {
+  try {
+    const { error } = updateContactSchema.validate(req.body);
     if (error) {
-      return res.status(400).json({ message: error.message });
+      res.status(400).json({ message: "missing fields" });
     }
-    const newContact = await contactsController.addContact(req.body);
-    res.status(200).json(newContact);
-  } catch (error) {
-    next(error);
-    return res.status(500).json({ message: "Server error" });
+
+    const updatedContact = await updateContact(req.params.contactId, req.body);
+    if (!updatedContact) {
+      res.status(404).json({ message: "not found" });
+    }
+    res.status(200).json(updatedContact);
+  } catch (err) {
+    console.warn(err.message);
   }
 });
 
-router.delete("/:contactId", auth, idValidation, async (req, res, next) => {
+router.patch("/:contactId/favorite", async (req, res) => {
   try {
-    const { contactId } = req.params;
-    await contactsController.removeContact(contactId);
-    res
-      .status(200)
-      .json({ message: `Contact with id=${contactId} was deleted.` });
-  } catch (error) {
-    next(error);
-    return res.status(500).json({ message: "Server error" });
+    const validation = favoriteSchema.validate(req.body);
+    if (!req.body) {
+      res.status(400).json({ message: "missing field favorite" });
+    }
+
+    if (!validation) {
+      res.status(400).json({ message: "Incorrect value in a field favorite" });
+    }
+
+    const updatedFavorite = await updateFavorite(
+      req.params.contactId,
+      req.body
+    );
+
+    if (!updatedFavorite) {
+      res.status(404).json({ message: "Not found" });
+    } else {
+      res.status(200).json(updatedFavorite);
+    }
+  } catch (err) {
+    console.warn(err.message);
   }
 });
-
-router.put("/:contactId", auth, idValidation, async (req, res, next) => {
-  try {
-    const { contactId } = req.params;
-    const { error } = validateUpdateContact(req.body);
-    if (error) {
-      return res.status(400).json({ message: error.message });
-    }
-    const contact = await contactsController.updateContact(contactId, req.body);
-    res.status(200).json(contact);
-  } catch (error) {
-    next(error);
-    return res.status(500).json({ message: "Server error" });
-  }
-});
-
-router.patch(
-  "/:contactId/favorite",
-  auth,
-  idValidation,
-  async (req, res, next) => {
-    try {
-      const { contactId } = req.params;
-      const { error } = validateUpdateStatusContact(req.body);
-      if (error) {
-        return res.status(400).json({ message: error.message });
-      }
-      const contact = await contactsController.updateContactStatus(
-        contactId,
-        req.body
-      );
-      res.status(200).json(contact);
-    } catch (error) {
-      next(error);
-      return res.status(500).json({ message: "Server error" });
-    }
-  }
-);
 
 module.exports = router;
