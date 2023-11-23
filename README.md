@@ -18,7 +18,6 @@ Before you start using this API, make sure the following libraries and dependenc
 
 - [Node.js](https://nodejs.org/) - JavaScript runtime environment.
 - [MongoDB](https://www.mongodb.com/) - NoSQL database used by the project.
-- morgan, cors, dotenv, express, joj, mongo, mongoose, nodemon.
 
 To install project dependencies, use the following command:
 
@@ -70,8 +69,8 @@ npm install
 ```json
 [
   {
-    "name": "Lukasz Ciaston",
-    "email": "lukasz.ciaston@example.com",
+    "name": "Jan Slonina",
+    "email": "jan.slonina@example.com",
     "phone": "+987654321"
   }
 ]
@@ -85,8 +84,8 @@ npm install
 [
   {
     "_id": "60e4d52574e786001c0b992e",
-    "name": "Lukasz Ciaston",
-    "email": "lukasz.ciaston@example.com",
+    "name": "Jan Slonina",
+    "email": "jan.slonina@example.com",
     "phone": "+987654321",
     "favorite": false
   }
