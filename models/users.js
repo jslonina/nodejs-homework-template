@@ -5,6 +5,11 @@ const userSchema = Joi.object({
   password: Joi.string().required(),
 });
 
+const verificationSchema = Joi.object({
+  email: Joi.string().email().lowercase().required(),
+});
+
 module.exports = {
   userSchema,
+  verificationSchema,
 };

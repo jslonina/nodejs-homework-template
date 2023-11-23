@@ -11,6 +11,10 @@ const findUserByID = async (id) => {
   return await User.findById(id);
 };
 
+const findUserByVerificationToken = async (token) => {
+  return await User.findOne({ verificationToken: token });
+};
+
 const addUser = async (body) => {
   return await User.create(body);
 };
@@ -20,4 +24,5 @@ module.exports = {
   findUserByEmail,
   addUser,
   findUserByID,
+  findUserByVerificationToken,
 };
